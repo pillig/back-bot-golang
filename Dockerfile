@@ -9,6 +9,6 @@ COPY . .
 RUN go mod download
 
 # Build
-RUN go build -o /back-bot
+RUN go build
 
-CMD ["/back-bot -f super-secret-token.txt"]
+CMD ["./back-bot", "-f", "super-secret-token.txt"]
