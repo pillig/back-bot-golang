@@ -13,16 +13,27 @@ import (
 
 func init() {
 	flag.StringVar(&token, "t", "", "Bot Token")
+	flag.StringVar(&tokenFile, "f", "", "Bot Token File")
 	flag.Parse()
 }
 
 var token string
+var tokenFile string
 
 func main() {
 
 	if token == "" {
-		fmt.Println("No token provided. Please run: go run main.go -t <bot token>")
-		return
+		if tokenFile == "" {
+			fmt.Println("No token or file provided. Please run: go run main.go -t <bot token> or Please run: go run main.go -f <token file>")
+			return
+		} else {
+			file, err := os.ReadFile(tokenFile)
+			if err != nil {
+				fmt.Println("Could not open token file")
+				return
+			}
+			token = string(file)
+		}
 	}
 
 	bot := discord.NewBot(token)
