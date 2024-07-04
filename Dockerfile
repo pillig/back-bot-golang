@@ -7,7 +7,8 @@ WORKDIR /app
 COPY . .
 
 # Build
-RUN go build -o back-bot
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    go build -o back-bot
 
 FROM alpine
 
