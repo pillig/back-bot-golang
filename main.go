@@ -51,6 +51,7 @@ func main() {
 	err := bot.Open()
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
+		os.Exit(1)
 	}
 
 	// Wait here until CTRL-C or other term signal is received.
