@@ -63,7 +63,7 @@ func StateFromCSVRecord(record []string) (UserID, UserLootState, error) {
 	return userID, state, nil
 }
 
-func CSVRecordFromState(userID UserID, userState UserLootState) ([]string, error) {
+func CSVRecordFromState(userID UserID, userState UserLootState) []string {
 	var record []string
 
 	record = append(record, string(userID), strconv.Itoa(userState.Greenbacks))
@@ -75,6 +75,9 @@ func CSVRecordFromState(userID UserID, userState UserLootState) ([]string, error
 
 	var lootItems []lootItem
 	for loot, count := range userState.Loot {
+		if count < 1 {
+			continue
+		}
 		lootItems = append(lootItems, lootItem{path: loot.Path(), count: strconv.Itoa(count)})
 	}
 
@@ -93,23 +96,23 @@ func CSVRecordFromState(userID UserID, userState UserLootState) ([]string, error
 		record = append(record, lootItem.path, lootItem.count)
 	}
 
-	return record, nil
+	return record
 }
 
 type LootBag interface {
-	// TODO: Will GetState ever return an error?
-	GetState(userID UserID) (UserLootState, error)
-	AddLoot(userID UserID, loot backs.Back) error
-	RedeemLoot(userID UserID, loot backs.Back) error
-	SellLoot(userID UserID, loot backs.Back) (int, error)
-	Rollback(userID UserID) error
+	GetState(userID UserID) UserLootState
+	AddLoot(userID UserID, loot backs.Back)
+	RemoveLoot(userID UserID, loot backs.Back) bool
+	Rollback(userID UserID)
 }
 
 type csvLootBag struct {
 	file       *os.File
 	userStates map[UserID]UserLootState
-	pulse      <-chan time.Time
+	lastSaved  time.Time
 }
+
+var _ LootBag = &csvLootBag{}
 
 func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 	file, err := os.OpenFile(datapath, os.O_RDWR|os.O_CREATE, 0644)
@@ -137,20 +140,56 @@ func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 		userStates[userID] = restoredState
 	}
 
-	return &csvLootBag{
+	c := &csvLootBag{
 		file:       file,
 		userStates: userStates,
-	}, nil
+	}
+
+	return c, nil
 }
 
-func (c *csvLootBag) GetState(userID UserID) (UserLootState, error) {
-	return c.userStates[userID], nil
+func (c *csvLootBag) GetState(userID UserID) UserLootState {
+	defer c.maybeFlush()
+
+	return c.userStates[userID]
 }
 
-func (c *csvLootBag) AddLoot(userID UserID, loot backs.Back) error         {}
-func (c *csvLootBag) RedeemLoot(userID UserID, loot backs.Back) error      {}
-func (c *csvLootBag) SellLoot(userID UserID, loot backs.Back) (int, error) {}
-func (c *csvLootBag) Rollback(userID UserID) error                         {}
+func (c *csvLootBag) AddLoot(userID UserID, loot backs.Back) {
+	defer c.maybeFlush()
+
+	state := c.userStates[userID]
+
+	if state.Loot == nil {
+		state.Loot = make(map[backs.Back]int)
+	}
+
+	prevCount := state.Loot[loot]
+
+	state.Loot[loot] = prevCount + 1
+	c.userStates[userID] = state
+}
+
+func (c *csvLootBag) RemoveLoot(userID UserID, loot backs.Back) bool {
+	defer c.maybeFlush()
+
+	state := c.userStates[userID]
+	if state.Loot[loot] < 1 {
+		return false
+	}
+
+	state.Loot[loot] -= 1
+
+	return true
+}
+
+func (c *csvLootBag) Rollback(userID UserID) {
+	defer c.maybeFlush()
+
+	state := c.userStates[userID]
+
+	state.Loot = make(map[backs.Back]int)
+	c.userStates[userID] = state
+}
 
 func (c *csvLootBag) Shutdown() error {
 	defer c.file.Close()
@@ -158,16 +197,23 @@ func (c *csvLootBag) Shutdown() error {
 	return c.flush()
 }
 
+func (c *csvLootBag) maybeFlush() {
+	if time.Since(c.lastSaved) < 15*time.Second {
+		return
+	}
+
+	err := c.flush()
+	if err != nil {
+		// TODO: structured log
+		fmt.Printf("errored while flushing csv loot state to disk. err: %v\n", err)
+	}
+}
+
 func (c *csvLootBag) flush() error {
 	var records [][]string
 
 	for userID, userState := range c.userStates {
-		record, err := CSVRecordFromState(userID, userState)
-		if err != nil {
-			// TODO: structured log
-			fmt.Printf("error serializing user state to csv record. userID: %v userState: %v err: %v\n", userID, userState, err)
-		}
-
+		record := CSVRecordFromState(userID, userState)
 		records = append(records, record)
 	}
 
@@ -198,25 +244,7 @@ func (c *csvLootBag) flush() error {
 		return fmt.Errorf("error while truncating csv file to fit buffer. err: %w", err)
 	}
 
+	c.lastSaved = time.Now()
+
 	return nil
-}
-
-func (c *csvLootBag) poll(stop <-chan struct{}) {
-	for {
-		select {
-		case <-stop:
-			fmt.Println("csv loot bag poller shutting down")
-			return
-
-		case <-c.pulse:
-			err := c.flush()
-			if err != nil {
-				fmt.Println(fmt.Errorf("error flushing in csv loot poller: %w", err))
-			}
-		}
-	}
-}
-
-func (c *csvLootBag) tick() {
-	c.pulse = time.After(5 * time.Second)
 }
