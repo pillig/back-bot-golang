@@ -8,9 +8,12 @@ import (
 )
 
 type Bot struct {
-	Session  *discordgo.Session
-	BackList *backs.BackMapping
+	Session     *discordgo.Session
+	BackHandler backs.BackHandler
 }
+
+// FIXME: May not want this hardcoded forever!
+const backRepoPath = "back_repo"
 
 func NewBot(token string) *Bot {
 	session, err := discordgo.New(fmt.Sprintf("Bot %s", token))
@@ -19,15 +22,15 @@ func NewBot(token string) *Bot {
 		return nil
 	}
 
-	backList, err := backs.GetBacks()
+	backHandler, err := backs.NewBackHandler(backRepoPath)
 	if err != nil {
-		fmt.Println("Problem getting the Back files back")
+		fmt.Println("Failed to instantiate backHandler")
 		return nil
 	}
 
 	return &Bot{
-		Session:  session,
-		BackList: backList,
+		Session:     session,
+		BackHandler: backHandler,
 	}
 }
 
@@ -44,7 +47,7 @@ func (b Bot) AddHandler(handler interface{}) {
 }
 
 func (b Bot) Start() {
-	b.Session.AddHandler(backs.OnBack)
+	b.Session.AddHandler(b.BackHandler.OnBack)
 	// We need information about guilds (which includes their channels),
 	// messages and voice states.
 	b.Session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates

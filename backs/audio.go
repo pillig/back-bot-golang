@@ -4,15 +4,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func Who(s *discordgo.Session, info BackInfo, backFiles *BackMapping) error {
+func (b *backHandler) Who(s *discordgo.Session, info BackInfo) error {
 
-	file, err := chooseBack(backFiles)
+	file, err := chooseBack(b.backs)
 	if err != nil {
 		fmt.Println("Could not choose a back!!! - CRITICAL: ", err)
 		return err
@@ -20,12 +20,12 @@ func Who(s *discordgo.Session, info BackInfo, backFiles *BackMapping) error {
 
 	fmt.Println("BACK CHOSEN: ", file)
 
-	back, err := loadBack(file)
+	backData, err := loadBack(b.backfs, file)
 	if err != nil {
 		fmt.Println("Could not acknowledge back!!! - CRITICAL: ", err)
 		return err
 	}
-	err = playBack(s, info, back)
+	err = playBack(s, info, backData)
 	return err
 }
 
@@ -63,9 +63,9 @@ func playBack(s *discordgo.Session, info BackInfo, backBytes [][]byte) error {
 	return nil
 }
 
-func loadBack(backPath string) ([][]byte, error) {
+func loadBack(backfs fs.FS, backPath string) ([][]byte, error) {
 	buffer := make([][]byte, 0)
-	file, err := os.Open(backPath)
+	file, err := backfs.Open(backPath)
 	if err != nil {
 		fmt.Println("Error opening dca file :", err)
 		return [][]byte{}, err
