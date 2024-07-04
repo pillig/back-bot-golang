@@ -2,71 +2,72 @@ package backs
 
 import (
 	"fmt"
+	"io/fs"
 	"math/rand"
-	"os"
+	"path"
+	"strings"
 )
 
-type backRarity struct {
-	Type  string
-	Value int
+type back struct {
+	path string
 }
 
-func getRarities() []backRarity {
-	return []backRarity{
-		{Type: "Rollback", Value: 1},
-		{Type: "Rare", Value: 10},
-		{Type: "Uncommon", Value: 90},
-		{Type: "Common", Value: 400},
-	}
+func (b back) Filename() string {
+	return path.Base(b.path)
 }
 
-func maxRarities() int {
-	max := 0
-	for _, rarity := range getRarities() {
-		if rarity.Value > max {
-			max = rarity.Value
-		}
-	}
-	return max
+func (b back) Backname() string {
+	return strings.Split(b.Filename(), ".")[0]
 }
 
-type BackMapping map[string][]string
+func (b back) Rarity() rarity {
+	r, _ := lookUpRarity(path.Base(path.Dir(b.path)))
+	return r
+}
+
+type BackMapping map[rarity][]back
 
 // GetBacks gets all the file paths assigned to their rarities
-func GetBacks() (*BackMapping, error) {
+func GetBacks(backfs fs.FS) (BackMapping, error) {
 
 	backMap := BackMapping{}
-	tiers, err := os.ReadDir("./back_repo")
+	tiers, err := fs.ReadDir(backfs, ".")
 	if err != nil {
 		fmt.Printf("what happened to my backs? %x\n", err)
-		return &BackMapping{}, err
+		return nil, err
 	}
 	for _, tier := range tiers {
-		backs := []string{}
-		rarity := tier.Name()
-		rarityDir := fmt.Sprintf("./back_repo/%s", rarity)
-		backFiles, err := os.ReadDir(rarityDir)
-		if err != nil {
-			fmt.Printf("something is wrong with my backs: %x\n", err)
-			return &BackMapping{}, err
-		}
-		for _, file := range backFiles {
-			backs = append(backs, fmt.Sprintf("%s/%s", rarityDir, file.Name()))
-		}
-		backMap[rarity] = backs
+		var backs []back
+		rarityString := tier.Name()
 
+		rarity, err := lookUpRarity(rarityString)
+		if err != nil {
+			return nil, fmt.Errorf("unknown rarity encountered as member of back_repo: %w", err)
+		}
+
+		fs.WalkDir(backfs, rarityString, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				fmt.Printf("err while walking back_repo subdirectory. path: %s err: %s\n", path, err)
+			}
+
+			backs = append(backs, back{path})
+
+			return nil
+		})
+
+		backMap[rarity] = backs
 	}
-	return &backMap, nil
+	return backMap, nil
 }
 
-func chooseBack(bl *BackMapping) (string, error) {
+func chooseBack(bl BackMapping) (string, error) {
 
-	max := maxRarities()
+	max := maxRarity()
 	roll := rand.Intn(max)
 	fmt.Printf("rolled a %d\n", roll)
-	for _, r := range getRarities() {
-		if roll <= r.Value {
-			back, err := pickFromBackList(bl, r.Type)
+	for _, r := range rarities {
+		if roll <= int(r) {
+			back, err := pickFromBackList(bl, r)
 			if err != nil {
 				return "", err
 			}
@@ -77,12 +78,11 @@ func chooseBack(bl *BackMapping) (string, error) {
 
 }
 
-func pickFromBackList(bl *BackMapping, rarity string) (string, error) {
-	list := *bl
-	val, ok := list[rarity]
+func pickFromBackList(bl BackMapping, rarity rarity) (string, error) {
+	val, ok := bl[rarity]
 	if ok {
 		index := rand.Intn(len(val))
-		return val[index], nil
+		return val[index].path, nil
 	} else {
 		return "", fmt.Errorf("no rarity of %s found in rarity list", rarity)
 	}
