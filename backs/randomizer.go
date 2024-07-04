@@ -1,6 +1,7 @@
 package backs
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"math/rand"
@@ -8,24 +9,36 @@ import (
 	"strings"
 )
 
-type back struct {
+type Back struct {
 	path string
 }
 
-func (b back) Filename() string {
+func GetBack(path string) (Back, error) {
+	// TODO: more validation of path?
+	if path == "" {
+		return Back{}, errors.New("Back path cannot be empty")
+	}
+	return Back{path}, nil
+}
+
+func (b Back) Path() string {
+	return b.path
+}
+
+func (b Back) Filename() string {
 	return path.Base(b.path)
 }
 
-func (b back) Backname() string {
+func (b Back) Backname() string {
 	return strings.Split(b.Filename(), ".")[0]
 }
 
-func (b back) Rarity() rarity {
+func (b Back) Rarity() rarity {
 	r, _ := lookUpRarity(path.Base(path.Dir(b.path)))
 	return r
 }
 
-type BackMapping map[rarity][]back
+type BackMapping map[rarity][]Back
 
 // GetBacks gets all the file paths assigned to their rarities
 func GetBacks(backfs fs.FS) (BackMapping, error) {
@@ -37,7 +50,7 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 		return nil, err
 	}
 	for _, tier := range tiers {
-		var backs []back
+		var backs []Back
 		rarityString := tier.Name()
 
 		rarity, err := lookUpRarity(rarityString)
@@ -55,7 +68,7 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 				return nil
 			}
 
-			backs = append(backs, back{path})
+			backs = append(backs, Back{path})
 
 			return nil
 		})
