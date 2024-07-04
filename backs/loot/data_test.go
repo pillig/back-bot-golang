@@ -2,6 +2,9 @@ package loot
 
 import (
 	"back-bot/backs"
+	"encoding/csv"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -150,4 +153,187 @@ func TestCSVRecordFromState(t *testing.T) {
 			}
 		}
 	}
+}
+
+type testFlushPolicy bool
+
+func (t testFlushPolicy) ShouldFlush() bool { return bool(t) }
+func (t testFlushPolicy) NotifyFlush()      {}
+
+func TestCsvLootBag(t *testing.T) {
+	testfilepath := filepath.Join(".", "test_loot.csv")
+
+	truncateTestFile := func() {
+		file, err := os.OpenFile(testfilepath, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file.Truncate(0)
+		file.Close()
+	}
+	truncateTestFile()
+
+	isTestFileEmpty := func() bool {
+		fi, err := os.Stat(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return fi.Size() == 0
+	}
+
+	getTestRecords := func() [][]string {
+		file, err := os.Open(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		defer file.Close()
+
+		csvR := csv.NewReader(file)
+		// allow variable number of fields per record
+		csvR.FieldsPerRecord = -1
+		records, err := csvR.ReadAll()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return records
+	}
+
+	// clean up test file after test suite
+	defer func() {
+		err := os.Remove(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	testback1 := testBack("back-one")
+	testback2 := testBack("back-two")
+	testback3 := testBack("back-three")
+
+	t.Run("test simple in-memory happy path: add, get, remove, get, add, rollback", func(t *testing.T) {
+		csvLB, err := NewCsvLootBag(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		csvLB.SetFlushPolicy(testFlushPolicy(false))
+
+		csvLB.AddLoot("bigback", testback1)
+
+		state := csvLB.GetState("bigback")
+		if state.Loot[testback1] != 1 {
+			t.Fatalf("expected %v count for back %v, got %v", 1, testback1, state.Loot[testback1])
+		}
+
+		csvLB.RemoveLoot("bigback", testback1)
+
+		state = csvLB.GetState("bigback")
+		if state.Loot[testback1] != 0 {
+			t.Fatalf("expected %v count for back %v, got %v", 0, testback1, state.Loot[testback1])
+		}
+
+		csvLB.AddLoot("bigback", testback1)
+		csvLB.AddLoot("bigback", testback2)
+		csvLB.AddLoot("bigback", testback3)
+		csvLB.AddLoot("bigback", testback2)
+
+		state = csvLB.GetState("bigback")
+		if state.Loot[testback1] != 1 {
+			t.Fatalf("expected %v count for back %v, got %v", 1, testback1, state.Loot[testback1])
+		}
+		if state.Loot[testback2] != 2 {
+			t.Fatalf("expected %v count for back %v, got %v", 2, testback2, state.Loot[testback2])
+		}
+		if state.Loot[testback3] != 1 {
+			t.Fatalf("expected %v count for back %v, got %v", 1, testback3, state.Loot[testback3])
+		}
+
+		csvLB.Rollback("bigback")
+
+		state = csvLB.GetState("bigback")
+		if len(state.Loot) > 0 {
+			t.Fatalf("expected state.Loot to be empty, got %v", state.Loot)
+		}
+
+	})
+
+	t.Run("test simple flush scenario", func(t *testing.T) {
+		truncateTestFile()
+
+		csvLB, err := NewCsvLootBag(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// get some in memory first to assert flush policy has intended effect
+		csvLB.SetFlushPolicy(testFlushPolicy(false))
+
+		csvLB.AddLoot("bigback", testback1)
+		csvLB.AddLoot("bigback", testback2)
+		csvLB.AddLoot("bigback", testback3)
+
+		if !isTestFileEmpty() {
+			t.Fatal("flushed records when flushPolicy should have blocked")
+		}
+
+		csvLB.SetFlushPolicy(testFlushPolicy(true))
+
+		csvLB.AddLoot("bigback", testback1)
+
+		if isTestFileEmpty() {
+			t.Fatalf("test file unexpectedly empty")
+		}
+
+		if records := getTestRecords(); len(records) != 1 {
+			t.Fatalf("expected 1 test record, got %v. records: %v", len(records), records)
+		}
+
+		csvLB.AddLoot("parkour", testback2)
+
+		if isTestFileEmpty() {
+			t.Fatalf("test file unexpectedly empty")
+		}
+
+		if records := getTestRecords(); len(records) != 2 {
+			t.Fatalf("expected 2 test records, got %v. records: %v", len(records), records)
+		}
+	})
+
+	t.Run("file persistence across lootbag incarnations", func(t *testing.T) {
+		truncateTestFile()
+
+		csvLB, err := NewCsvLootBag(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		csvLB.SetFlushPolicy(testFlushPolicy(true))
+
+		csvLB.AddLoot("bigback", testback1)
+		csvLB.AddLoot("parkour", testback2)
+
+		if state := csvLB.GetState("bigback"); state.Loot[testback1] != 1 {
+			t.Fatalf("failed to write bigback's testback1 add")
+		}
+		if state := csvLB.GetState("parkour"); state.Loot[testback2] != 1 {
+			t.Fatalf("failed to write parkour's testback2 add")
+		}
+
+		// create a separate lootbag instance. it should return the same state
+		// as the last one (although they should not be both live at the same time!)
+		csvLB2, err := NewCsvLootBag(testfilepath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if state := csvLB2.GetState("bigback"); state.Loot[testback1] != 1 {
+			t.Fatalf("failed to restore  bigback's testback1 state")
+		}
+		if state := csvLB2.GetState("parkour"); state.Loot[testback2] != 1 {
+			t.Fatalf("failed to restore parkour's testback2 state")
+		}
+	})
 }

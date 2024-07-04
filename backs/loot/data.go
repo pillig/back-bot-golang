@@ -103,13 +103,34 @@ type LootBag interface {
 	GetState(userID UserID) UserLootState
 	AddLoot(userID UserID, loot backs.Back)
 	RemoveLoot(userID UserID, loot backs.Back) bool
+	// TODO: IMPL!
+	// AddGreenbacks(userID UserID, gb int)
+	// SubtractGreenbacks(userID UserID, gb int)
 	Rollback(userID UserID)
 }
 
+type FlushPolicy interface {
+	NotifyFlush()
+	ShouldFlush() bool
+}
+
+type stalenessFlushPolicy struct {
+	flushThreshold time.Duration
+	lastFlushed    time.Time
+}
+
+func (sfp *stalenessFlushPolicy) NotifyFlush() {
+	sfp.lastFlushed = time.Now()
+}
+
+func (sfp *stalenessFlushPolicy) ShouldFlush() bool {
+	return time.Since(sfp.lastFlushed) > sfp.flushThreshold
+}
+
 type csvLootBag struct {
-	file       *os.File
-	userStates map[UserID]UserLootState
-	lastSaved  time.Time
+	file        *os.File
+	userStates  map[UserID]UserLootState
+	flushPolicy FlushPolicy
 }
 
 var _ LootBag = &csvLootBag{}
@@ -122,6 +143,8 @@ func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 
 	// CSV format: "userID","<greenbacks int>","<back-1-path>","<back-1-count>",...,"<back-n-path>","<back-n-count>"
 	reader := csv.NewReader(file)
+	// allow variable number of fields per record
+	reader.FieldsPerRecord = -1
 	restoredData, err := reader.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("error while reading csv file. filepath: %v err: %w", datapath, err)
@@ -141,8 +164,9 @@ func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 	}
 
 	c := &csvLootBag{
-		file:       file,
-		userStates: userStates,
+		file:        file,
+		userStates:  userStates,
+		flushPolicy: new(stalenessFlushPolicy),
 	}
 
 	return c, nil
@@ -197,8 +221,14 @@ func (c *csvLootBag) Shutdown() error {
 	return c.flush()
 }
 
+func (c *csvLootBag) SetFlushPolicy(fp FlushPolicy) {
+	if fp != nil {
+		c.flushPolicy = fp
+	}
+}
+
 func (c *csvLootBag) maybeFlush() {
-	if time.Since(c.lastSaved) < 15*time.Second {
+	if !c.flushPolicy.ShouldFlush() {
 		return
 	}
 
@@ -226,6 +256,11 @@ func (c *csvLootBag) flush() error {
 		}
 	}
 
+	// Notify the flush before we do filesystem interactions.
+	// If FS actions are failing, they aren't really likely to succeed
+	// if we try again soon after.
+	c.flushPolicy.NotifyFlush()
+
 	// Set the file's write head back to the top
 	_, err := c.file.Seek(0, 0)
 	if err != nil {
@@ -243,8 +278,6 @@ func (c *csvLootBag) flush() error {
 	if err != nil {
 		return fmt.Errorf("error while truncating csv file to fit buffer. err: %w", err)
 	}
-
-	c.lastSaved = time.Now()
 
 	return nil
 }
