@@ -153,6 +153,10 @@ func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 	userStates := make(map[UserID]UserLootState)
 
 	for _, record := range restoredData {
+		if len(record) < 2 {
+			continue
+		}
+
 		userID, restoredState, err := StateFromCSVRecord(record)
 		if err != nil {
 			// TODO: structured log
