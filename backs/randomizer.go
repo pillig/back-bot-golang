@@ -50,6 +50,11 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 				fmt.Printf("err while walking back_repo subdirectory. path: %s err: %s\n", path, err)
 			}
 
+			// skip the rarity dir itself
+			if path == rarityString {
+				return nil
+			}
+
 			backs = append(backs, back{path})
 
 			return nil
