@@ -24,6 +24,8 @@ type backHandler struct {
 	backs  BackMapping
 }
 
+var _ MessageHandler = new(backHandler) // *backHandler implements MessageHandler
+
 func NewBackHandler(repoPath string) (*backHandler, error) {
 	backfs := os.DirFS(repoPath)
 	backs, err := GetBacks(backfs)
@@ -37,15 +39,17 @@ func NewBackHandler(repoPath string) (*backHandler, error) {
 	}, nil
 }
 
-// OnBack is added as a handler to the Discord bot's connection.
+// Handle is added as a handler to the Discord bot's connection.
 // It'll be called whenever a message comes through on a channel that
 // the bot is monitoring.
-func (b *backHandler) OnBack(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (b *backHandler) Handle(s *discordgo.Session, m *discordgo.MessageCreate) (bool, error) {
 	fmt.Println("Message detected, checking for backs: ", m.Content)
+
 	// Back Bot can't back itself
 	if m.Author.ID == s.State.User.ID {
-		return
+		return false, nil
 	}
+
 	// check if the message is a variation of "back"
 	for _, word := range BackWords {
 		if strings.Contains(strings.ToLower(m.Content), word) {
@@ -54,14 +58,14 @@ func (b *backHandler) OnBack(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// Find where that Back came from.
 			c, err := s.State.Channel(m.ChannelID)
 			if err != nil {
-				return
+				return true, fmt.Errorf("BackHandler: error finding channel. msg: %+v err: %w", m.Message, err)
 			}
 
 			// Find the guild for that channel.
 			g, err := s.State.Guild(c.GuildID)
 			if err != nil {
 				// Could not find guild.
-				return
+				return true, fmt.Errorf("BackHandler: error finding guild/server. msg: %+v err: %w", m.Message, err)
 			}
 
 			// Look for the message sender in that guild's current voice states.
@@ -73,13 +77,14 @@ func (b *backHandler) OnBack(s *discordgo.Session, m *discordgo.MessageCreate) {
 						Back:       m.Author,
 					})
 					if err != nil {
-						fmt.Println("Error playing sound:", err)
+						err = fmt.Errorf("BackHandler: error playing sound: %w", err)
 					}
 
-					return
+					return true, err
 				}
 			}
 		}
 	}
 
+	return false, nil
 }

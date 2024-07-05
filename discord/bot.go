@@ -8,8 +8,8 @@ import (
 )
 
 type Bot struct {
-	Session     *discordgo.Session
-	BackHandler backs.BackHandler
+	Session        *discordgo.Session
+	MessageHandler backs.MessageHandler
 }
 
 // FIXME: May not want this hardcoded forever!
@@ -29,8 +29,8 @@ func NewBot(token string) *Bot {
 	}
 
 	return &Bot{
-		Session:     session,
-		BackHandler: backHandler,
+		Session:        session,
+		MessageHandler: backs.NewMessageDelegator(backHandler),
 	}
 }
 
@@ -42,12 +42,16 @@ func (b Bot) Close() {
 	b.Session.Close()
 }
 
-func (b Bot) AddHandler(handler interface{}) {
-	b.Session.AddHandler(handler)
+// RootHandler calls b.MessageHandler.Handle and logs any of its errors
+func (b Bot) RootHandler(s *discordgo.Session, msg *discordgo.MessageCreate) {
+	_, err := b.MessageHandler.Handle(s, msg)
+	if err != nil {
+		fmt.Printf("Bot.RootHandler received error from MessageHandler. msg: %+v err: %v\n", msg.Message, err)
+	}
 }
 
 func (b Bot) Start() {
-	b.Session.AddHandler(b.BackHandler.OnBack)
+	b.Session.AddHandler(b.RootHandler)
 	// We need information about guilds (which includes their channels),
 	// messages and voice states.
 	b.Session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
