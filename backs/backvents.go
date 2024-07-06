@@ -12,8 +12,9 @@ import (
 
 type BackInfo struct {
 	VoiceState *discordgo.VoiceState
-	Message    *discordgo.MessageCreate
-	Back       *discordgo.User
+	// TODO: is Message used for anything?
+	Message *discordgo.MessageCreate
+	Back    *discordgo.User
 }
 
 type BackHandler interface {
@@ -65,36 +66,51 @@ func (b *backHandler) Handle(s *discordgo.Session, m *discordgo.MessageCreate) (
 		if strings.Contains(strings.ToLower(m.Content), word) {
 			fmt.Println("BACK DETECTED, PLAYING BACK")
 
-			// Find where that Back came from.
-			c, err := s.State.Channel(m.ChannelID)
+			vs, err := retrieveVoiceStateForPlayback(s, m.Author.ID, m.ChannelID)
 			if err != nil {
-				return true, fmt.Errorf("BackHandler: error finding channel. msg: %+v err: %w", m.Message, err)
+				return false, fmt.Errorf("BackHandler: error retrieving voice state for playback: %w", err)
 			}
 
-			// Find the guild for that channel.
-			g, err := s.State.Guild(c.GuildID)
+			if vs == nil {
+				fmt.Printf("detected back, but user was not found in voice channel. username: %v\n", m.Author.Username)
+				return true, nil
+			}
+
+			err = b.Who(s, BackInfo{
+				VoiceState: vs,
+				Message:    m,
+				Back:       m.Author,
+			})
 			if err != nil {
-				// Could not find guild.
-				return true, fmt.Errorf("BackHandler: error finding guild/server. msg: %+v err: %w", m.Message, err)
+				err = fmt.Errorf("BackHandler: error playing sound: %w", err)
 			}
 
-			// Look for the message sender in that guild's current voice states.
-			for _, vs := range g.VoiceStates {
-				if vs.UserID == m.Author.ID {
-					err = b.Who(s, BackInfo{
-						VoiceState: vs,
-						Message:    m,
-						Back:       m.Author,
-					})
-					if err != nil {
-						err = fmt.Errorf("BackHandler: error playing sound: %w", err)
-					}
-
-					return true, err
-				}
-			}
+			return true, err
 		}
 	}
 
 	return false, nil
+}
+
+func retrieveVoiceStateForPlayback(s *discordgo.Session, originatingUserID string, channelID string) (*discordgo.VoiceState, error) {
+	// Find where that Back came from.
+	c, err := s.State.Channel(channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the guild for that channel.
+	g, err := s.State.Guild(c.GuildID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Look for the message sender in that guild's current voice states.
+	for _, vs := range g.VoiceStates {
+		if vs.UserID == originatingUserID {
+			return vs, nil
+		}
+	}
+
+	return nil, nil
 }
