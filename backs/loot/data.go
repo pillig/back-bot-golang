@@ -21,6 +21,57 @@ type UserLootState struct {
 	Greenbacks int
 }
 
+// LootItem is the tuple of (Back, Count), representing a (k, v) pair from the Loot map
+type LootItem struct {
+	model.Back
+	Count int
+}
+
+// LootByRarity partitions Loot by rarity, sorted by count
+func (u UserLootState) LootByRarity() map[model.Rarity][]LootItem {
+	out := make(map[model.Rarity][]LootItem)
+
+	for back, count := range u.Loot {
+		out[back.Rarity()] = append(out[back.Rarity()], LootItem{Back: back, Count: count})
+	}
+	for k, backs := range out {
+		sortLootItemsByCount(backs)
+		out[k] = backs
+	}
+
+	return out
+}
+
+// sort by path asc
+// TODO: gotta be a better way
+func sortLootItemsByPath(s []LootItem) {
+	slices.SortFunc(s, func(a, b LootItem) int {
+		switch true {
+		case a.Path() < b.Path():
+			return -1
+		case a.Path() > b.Path():
+			return 1
+		default:
+			return 0
+		}
+	})
+}
+
+// sort by count desc
+// TODO: gotta be a better way
+func sortLootItemsByCount(s []LootItem) {
+	slices.SortFunc(s, func(a, b LootItem) int {
+		switch true {
+		case a.Count < b.Count:
+			return 1
+		case a.Count > b.Count:
+			return -1
+		default:
+			return 0
+		}
+	})
+}
+
 func StateFromCSVRecord(record []string) (UserID, UserLootState, error) {
 	state := UserLootState{
 		Loot: make(map[model.Back]int),
@@ -70,32 +121,18 @@ func CSVRecordFromState(userID UserID, userState UserLootState) []string {
 
 	record = append(record, string(userID), strconv.Itoa(userState.Greenbacks))
 
-	type lootItem struct {
-		path  string
-		count string
-	}
-
-	var lootItems []lootItem
-	for loot, count := range userState.Loot {
+	var lootItems []LootItem
+	for back, count := range userState.Loot {
 		if count < 1 {
 			continue
 		}
-		lootItems = append(lootItems, lootItem{path: loot.Path(), count: strconv.Itoa(count)})
+		lootItems = append(lootItems, LootItem{Back: back, Count: count})
 	}
 
-	slices.SortFunc(lootItems, func(a, b lootItem) int {
-		switch true {
-		case a.path < b.path:
-			return -1
-		case a.path > b.path:
-			return 1
-		default:
-			return 0
-		}
-	})
+	sortLootItemsByPath(lootItems)
 
 	for _, lootItem := range lootItems {
-		record = append(record, lootItem.path, lootItem.count)
+		record = append(record, lootItem.Path(), strconv.Itoa(lootItem.Count))
 	}
 
 	return record

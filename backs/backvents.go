@@ -5,7 +5,6 @@ import (
 	"back-bot/backs/model"
 	"fmt"
 	"io/fs"
-	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -34,8 +33,7 @@ type backHandler struct {
 
 var _ MessageHandler = new(backHandler) // *backHandler implements MessageHandler
 
-func NewBackHandler(repoPath string) (*backHandler, error) {
-	backfs := os.DirFS(repoPath)
+func NewBackHandler(backfs fs.FS) (*backHandler, error) {
 	backs, err := GetBacks(backfs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get back (the most essential action). err: %w", err)

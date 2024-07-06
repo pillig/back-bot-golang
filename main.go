@@ -46,14 +46,13 @@ func main() {
 		fmt.Println("Back bot could not be started")
 		return
 	}
-	bot.Start()
 
 	// We need information about guilds (which includes their channels),
 	// messages and voice states.
 	bot.Session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
 
 	// Open the websocket and begin listening.
-	err := bot.Open()
+	err := bot.Start()
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)

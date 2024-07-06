@@ -4,6 +4,7 @@ import (
 	"back-bot/backs"
 	"back-bot/backs/loot"
 	"fmt"
+	"os"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -11,6 +12,7 @@ import (
 type Bot struct {
 	Session        *discordgo.Session
 	MessageHandler backs.MessageHandler
+	LootCommands   backs.LootCommands
 }
 
 // FIXME: May not want this hardcoded forever!
@@ -28,6 +30,8 @@ func NewBot(input NewBotInput) *Bot {
 		return nil
 	}
 
+	backfs := os.DirFS(backRepoPath)
+
 	var lootBag loot.LootBag
 	if input.CsvLootStoreFile != "" {
 		lootBag, err = loot.NewCsvLootBag(input.CsvLootStoreFile)
@@ -37,7 +41,7 @@ func NewBot(input NewBotInput) *Bot {
 		}
 	}
 
-	backHandler, err := backs.NewBackHandler(backRepoPath)
+	backHandler, err := backs.NewBackHandler(backfs)
 	if err != nil {
 		fmt.Println("Failed to instantiate backHandler")
 		return nil
@@ -48,6 +52,7 @@ func NewBot(input NewBotInput) *Bot {
 	return &Bot{
 		Session:        session,
 		MessageHandler: backs.NewMessageDelegator(backHandler),
+		LootCommands:   backs.NewLootCmdHandler(lootBag, backfs),
 	}
 }
 
@@ -67,9 +72,21 @@ func (b Bot) RootHandler(s *discordgo.Session, msg *discordgo.MessageCreate) {
 	}
 }
 
-func (b Bot) Start() {
+func (b Bot) Start() error {
 	b.Session.AddHandler(b.RootHandler)
 	// We need information about guilds (which includes their channels),
 	// messages and voice states.
 	b.Session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
+
+	err := b.Session.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open bot session: %w", err)
+	}
+
+	b.LootCommands.RegisterCommands(b.Session)
+	if err != nil {
+		return fmt.Errorf("failed to register bot loot commands: %w", err)
+	}
+
+	return nil
 }
