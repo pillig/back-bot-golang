@@ -35,9 +35,10 @@ var playbackCmd = &discordgo.ApplicationCommand{
 	},
 }
 var rollbackCmd = &discordgo.ApplicationCommand{
-	Name:        "rollback",
-	Description: "It's time to go back to the way things were",
-	Type:        discordgo.ChatApplicationCommand,
+	Name:         "rollback",
+	Description:  "It's time to go back to the way things were",
+	Type:         discordgo.ChatApplicationCommand,
+	DMPermission: &falseVar,
 }
 
 type LootCommands interface {
@@ -50,12 +51,14 @@ type LootCommands interface {
 type lootCmdHandler struct {
 	lootBag loot.LootBag
 	backfs  fs.FS
+	backs   BackMapping
 }
 
-func NewLootCmdHandler(lb loot.LootBag, backfs fs.FS) *lootCmdHandler {
+func NewLootCmdHandler(lb loot.LootBag, backfs fs.FS, provider BackProvider) *lootCmdHandler {
 	return &lootCmdHandler{
 		lootBag: lb,
 		backfs:  backfs,
+		backs:   provider.Backs(),
 	}
 }
 
@@ -182,6 +185,8 @@ func (l *lootCmdHandler) Playback(s *discordgo.Session, i *discordgo.Interaction
 			return
 		}
 
+		// TODO: maybe we should just do this at the end instead of having
+		// logic to undo it. oh well
 		l.lootBag.RemoveLoot(userID, back)
 
 		var playbackFailed bool
@@ -240,7 +245,91 @@ func (l *lootCmdHandler) Playback(s *discordgo.Session, i *discordgo.Interaction
 }
 
 func (l *lootCmdHandler) Rollback(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Command only allowed in channels, so user will be in Member field
+	userID := loot.UserID(i.Member.User.ID)
+	userState := l.lootBag.GetState(userID)
 
+	// TODO: reimplement Tom's rarity algorithm here: https://github.com/pillig/back-bot/blob/master/LootTools/loottracker.py#L45-L49
+	var rarityPoints int
+	for rarity, backs := range userState.LootByRarity() {
+		rarityPoints += int(rarity) * len(backs)
+	}
+
+	// TODO: structured logging
+	fmt.Printf("%s wants to roll back with %d rarity points...\n", i.Member.User.Username, rarityPoints)
+
+	if rarityPoints < 10_000 {
+		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf(
+					"You need more than 10,000 cumulative value in your backpack before you can rollback. "+
+						"You only have %d.",
+					rarityPoints,
+				),
+			},
+		})
+		if err != nil {
+			// TODO: structured logging
+			fmt.Printf("error sending interaction response: %v\n", err)
+		}
+		return
+	}
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("Ooohh %s is rolling it back!!!!!", i.Member.User.Username),
+		},
+	})
+	if err != nil {
+		// TODO: structured logging
+		fmt.Printf("error sending interaction response: %v\n", err)
+	}
+
+	rollback, err := pickFromBackList(l.backs, model.Rollback)
+	if err != nil {
+		// TODO: structured logging
+		fmt.Printf("failed to pick rollback model while handling /rollback. err: %v\n", err)
+		return
+	}
+
+	backData, err := loadBack(l.backfs, rollback.Path())
+	if err != nil {
+		// TODO: structured logging
+		fmt.Printf("failed to load back data while handling /rollback. err: %v\n", err)
+		return
+	}
+	vs, err := retrieveVoiceStateForPlayback(s, i.Member.User.ID, i.ChannelID)
+	if err != nil {
+		// TODO: structured logging
+		fmt.Printf("failed to retrieve voice state for /rollback. username: %v channelID: %v err: %v\n", i.Member.User.ID, i.ChannelID, err)
+		return
+	}
+
+	if vs == nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("Hey %s, you have to roll into a voice channel before I'll let you roll it back.", i.Member.User.Username),
+			},
+		})
+		return
+	}
+
+	// Ooohhh
+	l.lootBag.Rollback(userID)
+
+	err = playBack(s, BackInfo{
+		VoiceState: vs,
+		Back:       i.Member.User,
+		Message:    nil, // Message unused?
+	}, backData)
+	if err != nil {
+		// TODO: structured logging
+		fmt.Printf("error in playBack while handling /rollback. back: %v username: %v err: %v\n", rollback.Filename(), i.Member.User.Username, err)
+		return
+	}
 }
 
 // RegisterCommands should be called on the bot's Session to initially register the commands
@@ -256,6 +345,11 @@ func (l *lootCmdHandler) RegisterCommands(s *discordgo.Session) error {
 		return fmt.Errorf("failed to create playbackCmd: %w", err)
 	}
 
+	_, err = s.ApplicationCommandCreate(s.State.User.ID, "", rollbackCmd)
+	if err != nil {
+		return fmt.Errorf("failed to create rollbackCmd: %w", err)
+	}
+
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		fmt.Printf("handling an interaction! name: %s\n", i.ApplicationCommandData().Name)
 
@@ -264,6 +358,8 @@ func (l *lootCmdHandler) RegisterCommands(s *discordgo.Session) error {
 			l.Backpack(s, i)
 		case "playback":
 			l.Playback(s, i)
+		case "rollback":
+			l.Rollback(s, i)
 		}
 	})
 

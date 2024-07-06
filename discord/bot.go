@@ -30,7 +30,11 @@ func NewBot(input NewBotInput) *Bot {
 		return nil
 	}
 
+	// FIXME: I don't like the redundancy of backfs/backProvider.
+	// maybe we should just pass the actual backmapping around where it's needed,
+	// or the provider should completely encapsulate backfs
 	backfs := os.DirFS(backRepoPath)
+	backProvider := backs.NewBackProvider(backfs)
 
 	var lootBag loot.LootBag
 	if input.CsvLootStoreFile != "" {
@@ -41,7 +45,7 @@ func NewBot(input NewBotInput) *Bot {
 		}
 	}
 
-	backHandler, err := backs.NewBackHandler(backfs)
+	backHandler, err := backs.NewBackHandler(backfs, backProvider)
 	if err != nil {
 		fmt.Println("Failed to instantiate backHandler")
 		return nil
@@ -52,7 +56,7 @@ func NewBot(input NewBotInput) *Bot {
 	return &Bot{
 		Session:        session,
 		MessageHandler: backs.NewMessageDelegator(backHandler),
-		LootCommands:   backs.NewLootCmdHandler(lootBag, backfs),
+		LootCommands:   backs.NewLootCmdHandler(lootBag, backfs, backProvider),
 	}
 }
 

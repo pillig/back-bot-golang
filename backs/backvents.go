@@ -34,15 +34,10 @@ type backHandler struct {
 
 var _ MessageHandler = new(backHandler) // *backHandler implements MessageHandler
 
-func NewBackHandler(backfs fs.FS) (*backHandler, error) {
-	backs, err := GetBacks(backfs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get back (the most essential action). err: %w", err)
-	}
-
+func NewBackHandler(backfs fs.FS, provider BackProvider) (*backHandler, error) {
 	return &backHandler{
 		backfs: backfs,
-		backs:  backs,
+		backs:  provider.Backs(),
 	}, nil
 }
 
