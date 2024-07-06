@@ -172,7 +172,7 @@ type csvLootBag struct {
 	flushPolicy FlushPolicy
 }
 
-var _ LootBag = &csvLootBag{}
+var _ LootBag = new(csvLootBag) // *csvLootBag implements LootBag
 
 func NewCsvLootBag(datapath string) (*csvLootBag, error) {
 	file, err := os.OpenFile(datapath, os.O_RDWR|os.O_CREATE, 0644)

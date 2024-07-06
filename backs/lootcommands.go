@@ -45,7 +45,7 @@ func NewLootCmdHandler(lb loot.LootBag, backfs fs.FS) *lootCmdHandler {
 	}
 }
 
-var _ LootCommands = &lootCmdHandler{} // *lootCmdHandler implements LootCommands
+var _ LootCommands = new(lootCmdHandler) // *lootCmdHandler implements LootCommands
 
 func (l *lootCmdHandler) Backpack(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := i.Member.User
