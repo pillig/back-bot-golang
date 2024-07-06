@@ -1,6 +1,8 @@
 package backs
 
 import (
+	"back-bot/backs/loot"
+	"back-bot/backs/model"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -12,20 +14,31 @@ import (
 
 func (b *backHandler) Who(s *discordgo.Session, info BackInfo) error {
 
-	file, err := chooseBack(b.backs)
+	back, err := chooseBack(b.backs)
 	if err != nil {
 		fmt.Println("Could not choose a back!!! - CRITICAL: ", err)
 		return err
 	}
 
-	fmt.Println("BACK CHOSEN: ", file)
+	fmt.Println("BACK CHOSEN: ", back)
 
-	backData, err := loadBack(b.backfs, file)
+	backData, err := loadBack(b.backfs, back.Path())
 	if err != nil {
 		fmt.Println("Could not acknowledge back!!! - CRITICAL: ", err)
 		return err
 	}
 	err = playBack(s, info, backData)
+	// on successful playback, register the appropriate loot action
+	if err == nil {
+		userID := loot.UserID(info.Back.ID)
+
+		if back.Rarity() == model.Rollback {
+			b.lootActions.Rollback(userID)
+		} else {
+			b.lootActions.AddLoot(userID, back)
+		}
+	}
+
 	return err
 }
 

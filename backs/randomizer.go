@@ -1,44 +1,13 @@
 package backs
 
 import (
-	"errors"
+	"back-bot/backs/model"
 	"fmt"
 	"io/fs"
 	"math/rand"
-	"path"
-	"strings"
 )
 
-type Back struct {
-	path string
-}
-
-func GetBack(path string) (Back, error) {
-	// TODO: more validation of path?
-	if path == "" {
-		return Back{}, errors.New("Back path cannot be empty")
-	}
-	return Back{path}, nil
-}
-
-func (b Back) Path() string {
-	return b.path
-}
-
-func (b Back) Filename() string {
-	return path.Base(b.path)
-}
-
-func (b Back) Backname() string {
-	return strings.Split(b.Filename(), ".")[0]
-}
-
-func (b Back) Rarity() rarity {
-	r, _ := lookUpRarity(path.Base(path.Dir(b.path)))
-	return r
-}
-
-type BackMapping map[rarity][]Back
+type BackMapping map[model.Rarity][]model.Back
 
 // GetBacks gets all the file paths assigned to their rarities
 func GetBacks(backfs fs.FS) (BackMapping, error) {
@@ -50,10 +19,10 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 		return nil, err
 	}
 	for _, tier := range tiers {
-		var backs []Back
+		var backs []model.Back
 		rarityString := tier.Name()
 
-		rarity, err := lookUpRarity(rarityString)
+		rarity, err := model.LookUpRarity(rarityString)
 		if err != nil {
 			return nil, fmt.Errorf("unknown rarity encountered as member of back_repo: %w", err)
 		}
@@ -68,7 +37,8 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 				return nil
 			}
 
-			backs = append(backs, Back{path})
+			back, _ := model.GetBack(path)
+			backs = append(backs, back)
 
 			return nil
 		})
@@ -78,30 +48,30 @@ func GetBacks(backfs fs.FS) (BackMapping, error) {
 	return backMap, nil
 }
 
-func chooseBack(bl BackMapping) (string, error) {
+func chooseBack(bl BackMapping) (model.Back, error) {
 
-	max := maxRarity()
+	max := model.MaxRarity()
 	roll := rand.Intn(max)
 	fmt.Printf("rolled a %d\n", roll)
-	for _, r := range rarities {
+	for _, r := range model.Rarities {
 		if roll <= int(r) {
 			back, err := pickFromBackList(bl, r)
 			if err != nil {
-				return "", err
+				return model.Back{}, err
 			}
 			return back, nil
 		}
 	}
-	return "", fmt.Errorf("no back was able to be chosen")
+	return model.Back{}, fmt.Errorf("no back was able to be chosen")
 
 }
 
-func pickFromBackList(bl BackMapping, rarity rarity) (string, error) {
+func pickFromBackList(bl BackMapping, rarity model.Rarity) (model.Back, error) {
 	val, ok := bl[rarity]
 	if ok {
 		index := rand.Intn(len(val))
-		return val[index].path, nil
+		return val[index], nil
 	} else {
-		return "", fmt.Errorf("no rarity of %s found in rarity list", rarity)
+		return model.Back{}, fmt.Errorf("no rarity of %s found in rarity list", rarity)
 	}
 }

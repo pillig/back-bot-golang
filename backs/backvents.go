@@ -1,6 +1,8 @@
 package backs
 
 import (
+	"back-bot/backs/loot"
+	"back-bot/backs/model"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,9 +21,15 @@ type BackHandler interface {
 	OnBack(s *discordgo.Session, m *discordgo.MessageCreate)
 }
 
+type backHandlerLootActions interface {
+	AddLoot(userID loot.UserID, loot model.Back)
+	Rollback(userID loot.UserID)
+}
+
 type backHandler struct {
-	backfs fs.FS
-	backs  BackMapping
+	backfs      fs.FS
+	backs       BackMapping
+	lootActions backHandlerLootActions
 }
 
 var _ MessageHandler = new(backHandler) // *backHandler implements MessageHandler
@@ -37,6 +45,10 @@ func NewBackHandler(repoPath string) (*backHandler, error) {
 		backfs: backfs,
 		backs:  backs,
 	}, nil
+}
+
+func (b *backHandler) ConnectLootActions(la backHandlerLootActions) {
+	b.lootActions = la
 }
 
 // Handle is added as a handler to the Discord bot's connection.

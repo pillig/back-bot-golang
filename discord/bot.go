@@ -2,6 +2,7 @@ package discord
 
 import (
 	"back-bot/backs"
+	"back-bot/backs/loot"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -15,11 +16,25 @@ type Bot struct {
 // FIXME: May not want this hardcoded forever!
 const backRepoPath = "back_repo"
 
-func NewBot(token string) *Bot {
-	session, err := discordgo.New(fmt.Sprintf("Bot %s", token))
+type NewBotInput struct {
+	Token            string
+	CsvLootStoreFile string
+}
+
+func NewBot(input NewBotInput) *Bot {
+	session, err := discordgo.New(fmt.Sprintf("Bot %s", input.Token))
 	if err != nil {
 		fmt.Println("Could not authenticate Back Bot with Discord")
 		return nil
+	}
+
+	var lootBag loot.LootBag
+	if input.CsvLootStoreFile != "" {
+		lootBag, err = loot.NewCsvLootBag(input.CsvLootStoreFile)
+		if err != nil {
+			fmt.Printf("failed to create csv loot bag. err: %v\n", err)
+			return nil
+		}
 	}
 
 	backHandler, err := backs.NewBackHandler(backRepoPath)
@@ -27,6 +42,8 @@ func NewBot(token string) *Bot {
 		fmt.Println("Failed to instantiate backHandler")
 		return nil
 	}
+
+	backHandler.ConnectLootActions(lootBag)
 
 	return &Bot{
 		Session:        session,

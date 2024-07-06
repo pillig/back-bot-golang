@@ -1,15 +1,15 @@
 package loot
 
 import (
-	"back-bot/backs"
+	"back-bot/backs/model"
 	"encoding/csv"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func testBack(path string) backs.Back {
-	back, _ := backs.GetBack(path)
+func testBack(path string) model.Back {
+	back, _ := model.GetBack(path)
 	return back
 }
 
@@ -25,7 +25,7 @@ func TestStateFromCSVRecord(t *testing.T) {
 			expectedUserID: "bigback",
 			expectedState: UserLootState{
 				Greenbacks: 0,
-				Loot:       map[backs.Back]int{testBack("a"): 1, testBack("b"): 2},
+				Loot:       map[model.Back]int{testBack("a"): 1, testBack("b"): 2},
 			},
 			wantErr: false,
 		},
@@ -53,7 +53,7 @@ func TestStateFromCSVRecord(t *testing.T) {
 			expectedUserID: "bigback",
 			expectedState: UserLootState{
 				Greenbacks: 0,
-				Loot:       map[backs.Back]int{testBack("a"): 1, testBack("b"): 2},
+				Loot:       map[model.Back]int{testBack("a"): 1, testBack("b"): 2},
 			},
 			wantErr: false,
 		},
@@ -62,7 +62,7 @@ func TestStateFromCSVRecord(t *testing.T) {
 			expectedUserID: "bigback",
 			expectedState: UserLootState{
 				Greenbacks: 0,
-				Loot:       map[backs.Back]int{testBack("a"): 1, testBack("c"): 419},
+				Loot:       map[model.Back]int{testBack("a"): 1, testBack("c"): 419},
 			},
 			wantErr: false,
 		},
@@ -71,7 +71,7 @@ func TestStateFromCSVRecord(t *testing.T) {
 			expectedUserID: "bigback",
 			expectedState: UserLootState{
 				Greenbacks: 0,
-				Loot:       map[backs.Back]int{testBack("a"): 1, testBack("c"): 419},
+				Loot:       map[model.Back]int{testBack("a"): 1, testBack("c"): 419},
 			},
 			wantErr: false,
 		},
@@ -128,7 +128,7 @@ func TestCSVRecordFromState(t *testing.T) {
 			userID: "bigback",
 			state: UserLootState{
 				Greenbacks: 419,
-				Loot: map[backs.Back]int{
+				Loot: map[model.Back]int{
 					testBack("zzz"): 1,
 					testBack("zza"): 5,
 					testBack("aa"):  10,

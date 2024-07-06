@@ -9,19 +9,21 @@ import (
 	"strconv"
 	"time"
 
-	"back-bot/backs"
+	"back-bot/backs/model"
 )
 
+// TODO: move to models
 type UserID string
 
+// TODO: move to models
 type UserLootState struct {
-	Loot       map[backs.Back]int
+	Loot       map[model.Back]int
 	Greenbacks int
 }
 
 func StateFromCSVRecord(record []string) (UserID, UserLootState, error) {
 	state := UserLootState{
-		Loot: make(map[backs.Back]int),
+		Loot: make(map[model.Back]int),
 	}
 
 	// record guaranteed by caller to be len >= 2
@@ -40,7 +42,7 @@ func StateFromCSVRecord(record []string) (UserID, UserLootState, error) {
 	for record = record[2:]; len(record) >= 2; record = record[2:] {
 		lootPath, countString := record[0], record[1]
 
-		back, err := backs.GetBack(lootPath)
+		back, err := model.GetBack(lootPath)
 		if err != nil {
 			continue
 		}
@@ -101,8 +103,8 @@ func CSVRecordFromState(userID UserID, userState UserLootState) []string {
 
 type LootBag interface {
 	GetState(userID UserID) UserLootState
-	AddLoot(userID UserID, loot backs.Back)
-	RemoveLoot(userID UserID, loot backs.Back) bool
+	AddLoot(userID UserID, loot model.Back)
+	RemoveLoot(userID UserID, loot model.Back) bool
 	// TODO: IMPL!
 	// AddGreenbacks(userID UserID, gb int)
 	// SubtractGreenbacks(userID UserID, gb int)
@@ -182,13 +184,13 @@ func (c *csvLootBag) GetState(userID UserID) UserLootState {
 	return c.userStates[userID]
 }
 
-func (c *csvLootBag) AddLoot(userID UserID, loot backs.Back) {
+func (c *csvLootBag) AddLoot(userID UserID, loot model.Back) {
 	defer c.maybeFlush()
 
 	state := c.userStates[userID]
 
 	if state.Loot == nil {
-		state.Loot = make(map[backs.Back]int)
+		state.Loot = make(map[model.Back]int)
 	}
 
 	prevCount := state.Loot[loot]
@@ -197,7 +199,7 @@ func (c *csvLootBag) AddLoot(userID UserID, loot backs.Back) {
 	c.userStates[userID] = state
 }
 
-func (c *csvLootBag) RemoveLoot(userID UserID, loot backs.Back) bool {
+func (c *csvLootBag) RemoveLoot(userID UserID, loot model.Back) bool {
 	defer c.maybeFlush()
 
 	state := c.userStates[userID]
@@ -215,7 +217,7 @@ func (c *csvLootBag) Rollback(userID UserID) {
 
 	state := c.userStates[userID]
 
-	state.Loot = make(map[backs.Back]int)
+	state.Loot = make(map[model.Back]int)
 	c.userStates[userID] = state
 }
 

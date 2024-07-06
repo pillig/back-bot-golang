@@ -14,11 +14,13 @@ import (
 func init() {
 	flag.StringVar(&token, "t", "", "Bot Token")
 	flag.StringVar(&tokenFile, "f", "", "Bot Token File")
+	flag.StringVar(&csvLootStoreFile, "lootstore", "", "CSV Loot Store File")
 	flag.Parse()
 }
 
 var token string
 var tokenFile string
+var csvLootStoreFile string
 
 func main() {
 
@@ -36,7 +38,10 @@ func main() {
 		}
 	}
 
-	bot := discord.NewBot(token)
+	bot := discord.NewBot(discord.NewBotInput{
+		Token:            token,
+		CsvLootStoreFile: csvLootStoreFile,
+	})
 	if bot == nil {
 		fmt.Println("Back bot could not be started")
 		return
