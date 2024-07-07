@@ -85,7 +85,7 @@ func (l *lootCmdHandler) Backpack(s *discordgo.Session, i *discordgo.Interaction
 	//   * color for different rarities
 	//   * more compact columnar layout (look at https://pkg.go.dev/text/tabwriter)
 	wln("%s's loot:", user.Username)
-	wln("Rare:")
+	wln("Rare (%d each):", model.RarityLootValues[model.Rare])
 	for _, lootItem := range lootByRarity[model.Rare] {
 		if lootItem.Count > 0 {
 			wln("🔙 %s: %d", lootItem.Back.Filename(), lootItem.Count)
@@ -93,7 +93,7 @@ func (l *lootCmdHandler) Backpack(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	wln("")
-	wln("Uncommon:")
+	wln("Uncommon (%d each):", model.RarityLootValues[model.Uncommon])
 	for _, lootItem := range lootByRarity[model.Uncommon] {
 		if lootItem.Count > 0 {
 			wln("🔙 %s: %d", lootItem.Back.Filename(), lootItem.Count)
@@ -101,12 +101,15 @@ func (l *lootCmdHandler) Backpack(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	wln("")
-	wln("Common:")
+	wln("Common (%d each):", model.RarityLootValues[model.Common])
 	for _, lootItem := range lootByRarity[model.Common] {
 		if lootItem.Count > 0 {
 			wln("🔙 %s: %d", lootItem.Back.Filename(), lootItem.Count)
 		}
 	}
+
+	wln("")
+	wln("Total nominal value is %d greenbacks", userState.RarityPoints())
 
 	resp := &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -249,11 +252,7 @@ func (l *lootCmdHandler) Rollback(s *discordgo.Session, i *discordgo.Interaction
 	userID := loot.UserID(i.Member.User.ID)
 	userState := l.lootBag.GetState(userID)
 
-	// TODO: reimplement Tom's rarity algorithm here: https://github.com/pillig/back-bot/blob/master/LootTools/loottracker.py#L45-L49
-	var rarityPoints int
-	for rarity, backs := range userState.LootByRarity() {
-		rarityPoints += int(rarity) * len(backs)
-	}
+	rarityPoints := userState.RarityPoints()
 
 	// TODO: structured logging
 	fmt.Printf("%s wants to roll back with %d rarity points...\n", i.Member.User.Username, rarityPoints)
@@ -262,6 +261,7 @@ func (l *lootCmdHandler) Rollback(s *discordgo.Session, i *discordgo.Interaction
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
+				Flags: discordgo.MessageFlagsEphemeral,
 				Content: fmt.Sprintf(
 					"You need more than 10,000 cumulative value in your backpack before you can rollback. "+
 						"You only have %d.",

@@ -15,7 +15,7 @@ import (
 // TODO: move to models
 type UserID string
 
-// TODO: move to models
+// TODO: move to models?
 type UserLootState struct {
 	Loot       map[model.Back]int
 	Greenbacks int
@@ -40,6 +40,15 @@ func (u UserLootState) LootByRarity() map[model.Rarity][]LootItem {
 	}
 
 	return out
+}
+
+func (u UserLootState) RarityPoints() int {
+	var rarityPoints int
+	for rarity, backs := range u.LootByRarity() {
+		value := model.RarityLootValues[rarity]
+		rarityPoints += value * len(backs)
+	}
+	return rarityPoints
 }
 
 // sort by path asc
@@ -240,11 +249,21 @@ func (c *csvLootBag) RemoveLoot(userID UserID, loot model.Back) bool {
 	defer c.maybeFlush()
 
 	state := c.userStates[userID]
+
 	if state.Loot[loot] < 1 {
 		return false
 	}
 
 	state.Loot[loot] -= 1
+
+	if state.Loot[loot] < 1 {
+		delete(state.Loot, loot)
+	}
+
+	// This is technically unnecessary since the previous operations
+	// all take direct effect on the Loot map, but why not be defensive
+	// against future quirks or changes to the logic?
+	c.userStates[userID] = state
 
 	return true
 }
