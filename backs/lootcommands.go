@@ -219,7 +219,7 @@ func (l *lootCmdHandler) Playback(s *discordgo.Session, i *discordgo.Interaction
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: fmt.Sprintf("Hey %s, get the FUCK back in a voice channel if you want playback.", i.Member.User.Username),
+					Content: fmt.Sprintf("Hey %s, get back in a voice channel if you want playback.", i.Member.User.Username),
 				},
 			})
 			return
