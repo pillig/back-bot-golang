@@ -17,4 +17,4 @@ WORKDIR /app
 COPY --from=builder /app/back_repo ./back_repo
 COPY --from=builder /app/back-bot .
 
-CMD ["/bin/sh", "-c", "./back-bot -t $TOKEN"]
+ENTRYPOINT ["./back-bot"]

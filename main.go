@@ -14,11 +14,13 @@ import (
 func init() {
 	flag.StringVar(&token, "t", "", "Bot Token")
 	flag.StringVar(&tokenFile, "f", "", "Bot Token File")
+	flag.StringVar(&csvLootStoreFile, "lootstore", "", "CSV Loot Store File")
 	flag.Parse()
 }
 
 var token string
 var tokenFile string
+var csvLootStoreFile string
 
 func main() {
 
@@ -36,19 +38,21 @@ func main() {
 		}
 	}
 
-	bot := discord.NewBot(token)
+	bot := discord.NewBot(discord.NewBotInput{
+		Token:            token,
+		CsvLootStoreFile: csvLootStoreFile,
+	})
 	if bot == nil {
 		fmt.Println("Back bot could not be started")
 		return
 	}
-	bot.Start()
 
 	// We need information about guilds (which includes their channels),
 	// messages and voice states.
 	bot.Session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
 
 	// Open the websocket and begin listening.
-	err := bot.Open()
+	err := bot.Start()
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
