@@ -29,7 +29,7 @@ func (b *backHandler) Who(s *discordgo.Session, info BackInfo) error {
 	}
 	err = playBack(s, info, backData)
 	// on successful playback, register the appropriate loot action
-	if err == nil {
+	if err == nil && b.lootActions != nil {
 		userID := loot.UserID(info.Back.ID)
 
 		if back.Rarity() == model.Rollback {
