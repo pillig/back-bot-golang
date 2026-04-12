@@ -4,9 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN go get github.com/bwmarrin/discordgo@master && \
-    go mod tidy && \
-    go build -o back-bot
+RUN go mod tidy && go build -o back-bot
 
 FROM alpine
 

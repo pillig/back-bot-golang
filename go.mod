@@ -4,6 +4,9 @@ go 1.22.3
 
 require github.com/bwmarrin/discordgo v0.29.1-0.20260214123928-f43dd94faaac
 
+// Use DAVE E2EE fork until PR #1704 is merged into bwmarrin/discordgo
+replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo v0.0.0-20260321152711-3d3293e4c765
+
 require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
