@@ -1,14 +1,10 @@
-# syntax=docker/dockerfile:1
-
 FROM golang:1.22.3-alpine AS builder
 
 WORKDIR /app
 
 COPY . .
 
-# Build
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    go get github.com/bwmarrin/discordgo@master && \
+RUN go get github.com/bwmarrin/discordgo@master && \
     go mod tidy && \
     go build -o back-bot
 
