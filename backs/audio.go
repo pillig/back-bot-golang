@@ -51,8 +51,8 @@ func playBack(s *discordgo.Session, info BackInfo, backBytes [][]byte) error {
 	}
 	defer vc.Disconnect()
 
-	// Sleep for a specified amount of time before playing the sound
-	time.Sleep(50 * time.Millisecond)
+	// Brief pause to let the voice connection stabilize before speaking.
+	time.Sleep(250 * time.Millisecond)
 
 	err = vc.Speaking(true)
 	if err != nil {
@@ -68,8 +68,8 @@ func playBack(s *discordgo.Session, info BackInfo, backBytes [][]byte) error {
 	// Stop speaking
 	vc.Speaking(false)
 
-	// Sleep for a specificed amount of time before ending.
-	time.Sleep(50 * time.Millisecond)
+	// Buffer before disconnecting so the tail of the audio isn't clipped.
+	time.Sleep(500 * time.Millisecond)
 
 	return nil
 }
