@@ -2,7 +2,7 @@ module back-bot
 
 go 1.22.3
 
-require github.com/bwmarrin/discordgo v0.28.1
+require github.com/bwmarrin/discordgo v0.29.1-0.20260214123928-f43dd94faaac
 
 require (
 	github.com/gorilla/websocket v1.4.2 // indirect

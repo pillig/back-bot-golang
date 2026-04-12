@@ -8,6 +8,8 @@ COPY . .
 
 # Build
 RUN --mount=type=cache,target=/go/pkg/mod/ \
+    go get github.com/bwmarrin/discordgo@master && \
+    go mod tidy && \
     go build -o back-bot
 
 FROM alpine

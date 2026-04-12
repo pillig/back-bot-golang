@@ -45,13 +45,11 @@ func (b *backHandler) Who(s *discordgo.Session, info BackInfo) error {
 func playBack(s *discordgo.Session, info BackInfo, backBytes [][]byte) error {
 	// Join the provided voice channel.
 	vc, err := s.ChannelVoiceJoin(info.VoiceState.GuildID, info.VoiceState.ChannelID, false, false)
-
-	defer vc.Disconnect()
-
 	if err != nil {
 		fmt.Println("error joining channel: ", err)
 		return err
 	}
+	defer vc.Disconnect()
 
 	// Sleep for a specified amount of time before playing the sound
 	time.Sleep(50 * time.Millisecond)
